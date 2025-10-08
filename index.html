@@ -69,15 +69,16 @@ startBtn.addEventListener('click', async () => {
     startBtn.disabled = true;
     startBtn.textContent = "Подключаем камеру...";
     try {
-        // Тыловая камера, fallback на любую
+        // Явный запрос камеры с опцией playsinline
         const stream = await navigator.mediaDevices.getUserMedia({
             video: { facingMode: { ideal: "environment" } }
         });
         video.srcObject = stream;
         startBtn.style.display = 'none';
+        info.textContent = "Камера активна, положите палец на камеру";
         processFrame();
     } catch(e) {
-        alert('Не удалось получить камеру: ' + e);
+        alert('Не удалось получить доступ к камере. Разрешите камеру в браузере: ' + e);
         startBtn.disabled = false;
         startBtn.textContent = "Поехали";
     }
@@ -95,7 +96,6 @@ function processFrame(){
         brightnessHistory.push(brightness);
         if(brightnessHistory.length>200) brightnessHistory.shift();
 
-        // Пики для BPM
         if(brightnessHistory.length>3){
             const last = brightnessHistory[brightnessHistory.length-1];
             const prev = brightnessHistory[brightnessHistory.length-2];
@@ -118,7 +118,8 @@ function processFrame(){
         pulseStrength = Math.min(Math.max(pulseStrength,0),0.5);
 
         circle.style.transform = scale(${1+pulseStrength});
-        circle.style.boxShadow = 0 0 ${50+pulseStrength*50}px rgba(154,0,255,0.7);
+        circle.style.
+        boxShadow = 0 0 ${50+pulseStrength*50}px rgba(154,0,255,0.7);
     }
     requestAnimationFrame(processFrame);
 }
