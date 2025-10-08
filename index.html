@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -22,8 +22,8 @@ body {
     width:150px;
     height:150px;
     border-radius:50%;
-    background: linear-gradient(135deg, #ff4d4d, #ff1a75);
-    box-shadow:0 0 50px rgba(255,0,100,0.7);
+    background: linear-gradient(135deg, #ff4dff, #9a00ff);
+    box-shadow:0 0 50px rgba(154,0,255,0.7);
     transition: transform 0.05s ease, box-shadow 0.05s ease;
     margin-bottom:20px;
 }
@@ -36,11 +36,11 @@ body {
     cursor:pointer;
     border:none;
     border-radius:8px;
-    background-color:#ff1a75;
+    background-color:#9a00ff;
     color:#fff;
     transition: background 0.2s;
 }
-#start-btn:hover { background-color:#ff4d4d; }
+#start-btn:hover { background-color:#c715ff; }
 video { display:none; }
 </style>
 </head>
@@ -48,9 +48,9 @@ video { display:none; }
 
 <video id="video" autoplay playsinline></video>
 <div id="pulse-circle"></div>
-<div id="info">Нажмите "Запустить камеру" и положите палец на камеру</div>
+<div id="info">Нажмите "Поехали" и положите палец на камеру</div>
 <div id="bpm">-- BPM</div>
-<button id="start-btn">Запустить камеру</button>
+<button id="start-btn">Поехали</button>
 
 <script>
 const video = document.getElementById('video');
@@ -69,7 +69,7 @@ startBtn.addEventListener('click', async () => {
     startBtn.disabled = true;
     startBtn.textContent = "Подключаем камеру...";
     try {
-        // Пытаемся использовать тыловую камеру, fallback на любую
+        // Тыловая камера, fallback на любую
         const stream = await navigator.mediaDevices.getUserMedia({
             video: { facingMode: { ideal: "environment" } }
         });
@@ -79,7 +79,7 @@ startBtn.addEventListener('click', async () => {
     } catch(e) {
         alert('Не удалось получить камеру: ' + e);
         startBtn.disabled = false;
-        startBtn.textContent = "Запустить камеру";
+        startBtn.textContent = "Поехали";
     }
 });
 
@@ -118,7 +118,7 @@ function processFrame(){
         pulseStrength = Math.min(Math.max(pulseStrength,0),0.5);
 
         circle.style.transform = scale(${1+pulseStrength});
-        circle.style.boxShadow = 0 0 ${50+pulseStrength*50}px rgba(255,0,100,0.7);
+        circle.style.boxShadow = 0 0 ${50+pulseStrength*50}px rgba(154,0,255,0.7);
     }
     requestAnimationFrame(processFrame);
 }
