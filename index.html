@@ -27,7 +27,12 @@ body {
     transition: transform 0.05s ease, box-shadow 0.05s ease;
     margin-bottom:20px;
 }
-#info { font-size:18px; text-align:center; }
+#info { 
+    font-size:18px; 
+    text-align:center;
+    max-width:90%;
+    padding:0 20px;
+}
 #bpm { font-size:32px; font-weight:bold; margin-top:10px; }
 #start-btn {
     padding:12px 25px;
@@ -41,86 +46,197 @@ body {
     transition: background 0.2s;
 }
 #start-btn:hover { background-color:#c715ff; }
+#start-btn:disabled { 
+    background-color:#555; 
+    cursor:not-allowed; 
+}
 video { display:none; }
+#debug {
+    position:fixed;
+    bottom:10px;
+    left:10px;
+    font-size:12px;
+    color:#888;
+}
 </style>
 </head>
 <body>
 
-<video id="video" autoplay playsinline></video>
+<video id="video" autoplay playsinline muted></video>
 <div id="pulse-circle"></div>
 <div id="info">Нажмите "Поехали" и положите палец на камеру</div>
 <div id="bpm">-- BPM</div>
-<button id="start-btn">Поехали jjj</button>
+<button id="start-btn">Поехали</button>
+<div id="debug"></div>
 
 <script>
 const video = document.getElementById('video');
 const circle = document.getElementById('pulse-circle');
 const bpmDisplay = document.getElementById('bpm');
 const startBtn = document.getElementById('start-btn');
+const info = document.getElementById('info');
+const debug = document.getElementById('debug');
 
 const canvas = document.createElement('canvas');
-const ctx = canvas.getContext('2d');
+const ctx = canvas.getContext('2d', { willReadFrequently: true });
 
 let brightnessHistory = [];
 let lastPeakTime = 0;
 let pulseIntervals = [];
+let isProcessing = false;
+
+// Проверка поддержки
+if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    info.textContent = "Ваш браузер не поддерживает доступ к камере";
+    startBtn.disabled = true;
+    debug.textContent = "getUserMedia не поддерживается";
+}
 
 startBtn.addEventListener('click', async () => {
     startBtn.disabled = true;
     startBtn.textContent = "Подключаем камеру...";
+    info.textContent = "Запрашиваем доступ к камере...";
+    
     try {
-        // Явный запрос камеры с опцией playsinline
-        const stream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: { ideal: "environment" } }
-        });
+        debug.textContent = "Запрос камеры...";
+        
+        // Запрос камеры - для мобильных используем заднюю камеру
+        const constraints = {
+            video: {
+                facingMode: "environment",
+                width: { ideal: 640 },
+                height: { ideal: 480 }
+            },
+            audio: false
+        };
+        
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        debug.textContent = "Камера получена";
+        
         video.srcObject = stream;
-        startBtn.style.display = 'none';
-        info.textContent = "Камера активна, положите палец на камеру";
-        processFrame();
+        
+        // Ждем пока видео загрузится
+        video.onloadedmetadata = () => {
+            debug.textContent = "Видео загружено";
+            video.play().then(() => {
+                startBtn.style.display = 'none';
+                info.textContent = "✋ Положите палец на камеру и включите вспышку";
+                debug.textContent = "Видео запущено";
+                
+                // Включаем фонарик если доступно
+                const track = stream.getVideoTracks()[0];
+                if (track.getCapabilities && track.getCapabilities().torch) {
+                    track.applyConstraints({
+                        advanced: [{ torch: true }]
+                    }).catch(e => debug.textContent = "Фонарик недоступен: " + e.message);
+                }
+                
+                isProcessing = true;
+                processFrame();
+            }).catch(e => {
+                info.textContent = "Ошибка воспроизведения: " + e.message;
+                debug.textContent = "Play error: " + e.
+                    message;
+            });
+        };
+        
+        video.onerror = (e) => {
+            info.textContent = "Ошибка видео";
+            debug.textContent = "Video error: " + e;
+        };
+        
     } catch(e) {
-        alert('Не удалось получить доступ к камере. Разрешите камеру в браузере: ' + e);
+        console.error('Camera error:', e);
+        let errorMsg = "Не удалось получить доступ к камере. ";
+        
+        if (e.name === 'NotAllowedError') {
+            errorMsg += "Вы отклонили доступ к камере. Разрешите доступ в настройках браузера.";
+        } else if (e.name === 'NotFoundError') {
+            errorMsg += "Камера не найдена.";
+        } else if (e.name === 'NotReadableError') {
+            errorMsg += "Камера используется другим приложением.";
+        } else {
+            errorMsg += e.message;
+        }
+        
+        info.textContent = errorMsg;
+        debug.textContent = Error: ${e.name} - ${e.message};
         startBtn.disabled = false;
-        startBtn.textContent = "Поехали";
+        startBtn.textContent = "Попробовать снова";
+        startBtn.style.display = 'block';
     }
 });
 
 function processFrame(){
-    if(video.readyState >= 2){
-        canvas.width = video.videoWidth/2;
-        canvas.height = video.videoHeight/2;
-        ctx.drawImage(video,0,0,canvas.width,canvas.height);
-        const frame = ctx.getImageData(0,0,canvas.width,canvas.height).data;
-        let sum=0;
-        for(let i=0;i<frame.length;i+=4){ sum+=frame[i]+frame[i+1]+frame[i+2]; }
-        const brightness = sum/(frame.length/4);
-        brightnessHistory.push(brightness);
-        if(brightnessHistory.length>200) brightnessHistory.shift();
-
-        if(brightnessHistory.length>3){
-            const last = brightnessHistory[brightnessHistory.length-1];
-            const prev = brightnessHistory[brightnessHistory.length-2];
-            const prev2 = brightnessHistory[brightnessHistory.length-3];
-            if(prev>last && prev>prev2 && Date.now()-lastPeakTime>300){
-                if(lastPeakTime!=0){
-                    const interval = (Date.now()-lastPeakTime)/1000;
-                    pulseIntervals.push(interval);
-                    if(pulseIntervals.length>10) pulseIntervals.shift();
-                    const avgInterval = pulseIntervals.reduce((a,b)=>a+b,0)/pulseIntervals.length;
-                    const bpm = Math.round(60/avgInterval);
-                    bpmDisplay.textContent = bpm+" BPM";
-                }
-                lastPeakTime = Date.now();
-            }
+    if (!isProcessing) return;
+    
+    if(video.readyState >= video.HAVE_CURRENT_DATA){
+        // Устанавливаем размер canvas
+        if (canvas.width === 0) {
+            canvas.width = Math.min(video.videoWidth, 320);
+            canvas.height = Math.min(video.videoHeight, 240);
         }
+        
+        try {
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const frame = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+            
+            // Вычисляем среднюю яркость (используем только красный канал для лучшего результата)
+            let redSum = 0;
+            for(let i = 0; i < frame.length; i += 4) { 
+                redSum += frame[i]; // только красный канал
+            }
+            const brightness = redSum / (frame.length / 4);
+            
+            brightnessHistory.push(brightness);
+            if(brightnessHistory.length > 300) brightnessHistory.shift();
 
-        const recent = brightnessHistory.slice(-5);
-        let pulseStrength = (recent[recent.length-1]-recent[0])/30;
-        pulseStrength = Math.min(Math.max(pulseStrength,0),0.5);
+            // Детекция пиков (пульса)
+            if(brightnessHistory.length > 5){
+                const last = brightnessHistory[brightnessHistory.length - 1];
+                const prev = brightnessHistory[brightnessHistory.length - 2];
+                const prev2 = brightnessHistory[brightnessHistory.length - 3];
+                
+                // Пик = локальный максимум
+                if(prev > last && prev > prev2 && Date.now() - lastPeakTime > 400){
+                    if(lastPeakTime !== 0){
+                        const interval = (Date.now() - lastPeakTime) / 1000;
+                        
+                        // Фильтруем нереалистичные значения (30-200 BPM)
+                        const bpm = 60 / interval;
+                        if(bpm >= 30 && bpm <= 200) {
+                            pulseIntervals.push(interval);
+                            if(pulseIntervals.length > 8) pulseIntervals.shift();
+                            
+                            const avgInterval = pulseIntervals.reduce((a,b) => a + b, 0) / pulseIntervals.length;
+                            const avgBpm = Math.round(60 / avgInterval);
+                            bpmDisplay.textContent = avgBpm + " BPM";
+                            
+                            // Анимация пульса
+                            circle.style.transform = 'scale(1.3)';
+                            setTimeout(() => {
+                                circle.style.transform = 'scale(1)';
+                            }, 100);
+                        }
+                    }
+                    lastPeakTime = Date.now();
+                }
+            }
 
-        circle.style.transform = scale(${1+pulseStrength});
-        circle.style.
-        boxShadow = 0 0 ${50+pulseStrength*50}px rgba(154,0,255,0.7);
+            // Визуализация яркости
+            const recent = brightnessHistory.slice(-10);
+            if (recent.length > 0) {
+                const avgBrightness = recent.reduce((a,b) => a + b, 0) / recent.length;
+                const pulseStrength = Math.min(Math.max((brightness - avgBrightness) / 50, 0), 0.3);
+                circle.style.boxShadow = 0 0 ${50 + pulseStrength * 100}px rgba(154,0,255,${0.7 + pulseStrength});
+            }
+            
+        } catch(e) {
+            debug.
+                textContent = "Processing error: " + e.message;
+        }
     }
+    
     requestAnimationFrame(processFrame);
 }
 </script>
