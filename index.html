@@ -46,7 +46,7 @@ video { display:none; }
 </head>
 <body>
 
-<video id="video" autoplay></video>
+<video id="video" autoplay playsinline></video>
 <div id="pulse-circle"></div>
 <div id="info">Нажмите "Запустить камеру" и положите палец на камеру</div>
 <div id="bpm">-- BPM</div>
@@ -64,23 +64,27 @@ const ctx = canvas.getContext('2d');
 let brightnessHistory = [];
 let lastPeakTime = 0;
 let pulseIntervals = [];
-let usingCamera = false;
 
 startBtn.addEventListener('click', async () => {
+    startBtn.disabled = true;
+    startBtn.textContent = "Подключаем камеру...";
     try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode:"environment" } });
+        // Пытаемся использовать тыловую камеру, fallback на любую
+        const stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: { ideal: "environment" } }
+        });
         video.srcObject = stream;
-        usingCamera = true;
         startBtn.style.display = 'none';
+        processFrame();
     } catch(e) {
-        alert('Камера недоступна. Используется имитация пульса.');
-        startBtn.style.display = 'none';
-        simulatePulse();
+        alert('Не удалось получить камеру: ' + e);
+        startBtn.disabled = false;
+        startBtn.textContent = "Запустить камеру";
     }
 });
 
 function processFrame(){
-    if(usingCamera && video.readyState >= 2){
+    if(video.readyState >= 2){
         canvas.width = video.videoWidth/2;
         canvas.height = video.videoHeight/2;
         ctx.drawImage(video,0,0,canvas.width,canvas.height);
@@ -118,22 +122,6 @@ function processFrame(){
     }
     requestAnimationFrame(processFrame);
 }
-
-// Имитация для теста
-function simulatePulse(){
-    let angle=0;
-    setInterval(()=>{
-
-        const pulseStrength = (Math.sin(angle)+1)/4;
-        circle.style.transform = scale(${1+pulseStrength});
-        circle.style.boxShadow = 0 0 ${50+pulseStrength*50}px rgba(255,0,100,0.7);
-        const bpm = Math.round(60+Math.sin(angle)*10);
-        bpmDisplay.textContent = bpm+" BPM";
-        angle+=0.1;
-    },50);
-}
-
-processFrame();
 </script>
 </body>
 </html>
